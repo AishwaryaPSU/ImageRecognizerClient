@@ -1,5 +1,7 @@
 // ObjectRecogniserAIDL.aidl
 package com.aishwaryagm.objectrecogniser;
+import com.aishwaryagm.objectrecogniser.ParcelableImageBytes;
+import com.aishwaryagm.objectrecogniser.CallBackInterface;
 
 // Declare any non-default types here with import statements
 
@@ -12,4 +14,8 @@ interface ObjectRecogniserAIDL {
             double aDouble, String aString);
 
     String[] analyzeImage(in byte[] inputImageInBytes);
+
+    String[] analyzeImageImpr(in ParcelableImageBytes parcelableImageBytes);
+
+    oneway void analyzeImageByPath(in String filePath, in CallBackInterface callbackObject);
 }
