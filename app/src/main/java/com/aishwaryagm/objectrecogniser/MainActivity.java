@@ -6,7 +6,10 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
@@ -14,6 +17,7 @@ import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Environment;
 import android.os.IBinder;
 import android.provider.MediaStore;
@@ -41,6 +45,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 import static android.Manifest.*;
@@ -51,10 +56,10 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_GALLERY = 2;
     private ObjectRecogniserAIDL remoteService;
     private Bitmap bitmapImage;
-    private File photoFile ;
+    private File photoFile;
     static final int REQUEST_TAKE_PHOTO = 1;
     private String myCurrentPhotoPath;
-    private static final int REQUEST_PERMISSION_CODE=3;
+    private static final int REQUEST_PERMISSION_CODE = 3;
     ImageTransmitterAsyncTask imageTransmitterAsyncTask;
     private ApplicationState applicationState;
     private ImageView imageToDisplay;
@@ -73,44 +78,53 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Intent serviceIntent = new Intent("com.aishwaryagm.objectrecogniser.services.ObjectRecogniserService");
+        String serviceAction = "com.aishwaryagm.objectrecogniser.services.ObjectRecogniserService";
+        boolean isServiceAvailable = isIntentAvailable(this, serviceAction);
+        Log.i("INFO", String.format("isServiceAvailable : %s", isServiceAvailable));
+        if (!isServiceAvailable) {
+            Toast.makeText(this, String.format("Please install server application"), Toast.LENGTH_LONG).show();
+            Log.i("INFO", String.format("server app installed %s : ", installmyAPK()));
+        }
+        Intent serviceIntent = new Intent(serviceAction);
         serviceIntent.setPackage("com.aishwaryagm.objectrecogniser");
-        Log.i("INFO",String.format("bindService is about to be called...."));
+        Log.i("INFO", String.format("bindService is about to be called...."));
         boolean isSuccessful = bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
-        Log.i("INFO",String.format("bindService result %s", isSuccessful));
+        Log.i("INFO", String.format("bindService result %s", isSuccessful));
         applicationState = ApplicationState.APPLICATION_STARTED;
     }
-    public void takePhoto(){
-        Log.i("INFO",String.format("Take photo entered"));
+
+    public void takePhoto() {
+        Log.i("INFO", String.format("Take photo entered"));
         checkWritePermision();
     }
+
 
     private void checkWritePermision() {
         //create an image file name
         int checkPermission = ContextCompat.checkSelfPermission(this, permission.WRITE_EXTERNAL_STORAGE);
         int permissionGranted = PackageManager.PERMISSION_GRANTED;
-        Log.i("Info",String.format("PermissionGranted %s CheckPermission %s", permissionGranted, checkPermission));
+        Log.i("Info", String.format("PermissionGranted %s CheckPermission %s", permissionGranted, checkPermission));
 
         if (checkPermission != permissionGranted) {
-            String[] permissions ={permission.WRITE_EXTERNAL_STORAGE,permission.READ_EXTERNAL_STORAGE};
-            this.requestPermissions(permissions,REQUEST_PERMISSION_CODE);
+            String[] permissions = {permission.WRITE_EXTERNAL_STORAGE, permission.READ_EXTERNAL_STORAGE};
+            this.requestPermissions(permissions, REQUEST_PERMISSION_CODE);
         }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        Log.i("INFO",String.format("myCurrentPhotoPath : %s photoFile : %s",myCurrentPhotoPath,photoFile));
-        if(requestCode==REQUEST_CAMERA && resultCode==RESULT_OK){
+        Log.i("INFO", String.format("myCurrentPhotoPath : %s photoFile : %s", myCurrentPhotoPath, photoFile));
+        if (requestCode == REQUEST_CAMERA && resultCode == RESULT_OK) {
             //do nothing
         }
-        if(requestCode==REQUEST_GALLERY && resultCode==RESULT_OK){
+        if (requestCode == REQUEST_GALLERY && resultCode == RESULT_OK) {
             try {
                 InputStream inputStream = this.getContentResolver().openInputStream(data.getData());
                 OutputStream outputStream = new FileOutputStream(photoFile);
                 IOUtils.copy(inputStream, outputStream);
                 outputStream.close();
-            }catch(Exception exception){
-                Log.e("ERROR",String.format("Exceptionduring reading image from gallery %s",exception.getMessage()));
+            } catch (Exception exception) {
+                Log.e("ERROR", String.format("Exceptionduring reading image from gallery %s", exception.getMessage()));
                 exception.printStackTrace();
             }
         }
@@ -120,7 +134,8 @@ public class MainActivity extends AppCompatActivity {
         imageToDisplay.setImageBitmap(bitmapImage);
         applicationState = ApplicationState.PHOTO_TAKEN;
     }
-    public void inspectObjects(View view){
+
+    public void inspectObjects(View view) {
         try {
             File newPhotoFile = createImage();
             copyFile(photoFile, newPhotoFile);
@@ -136,19 +151,20 @@ public class MainActivity extends AppCompatActivity {
             ImageTransmitterAsyncTask imageTransmitterAsyncTask = new ImageTransmitterAsyncTask(bitmapImage, newPhotoFile, remoteService, resultScrollView, this, progressBar, resultTextViewDescription);
             imageTransmitterAsyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             applicationState = ApplicationState.INSPECT_OBJECT_CALLED;
-        }catch(Exception exception){
-            Log.e("ERROR",String.format("Exception occurred in inspectObjects method , %s",exception.getMessage()));
+        } catch (Exception exception) {
+            Log.e("ERROR", String.format("Exception occurred in inspectObjects method , %s", exception.getMessage()));
             exception.printStackTrace();
-            Toast.makeText(this,String.format("Inspecting objects failed ..."),Toast.LENGTH_LONG).show();
+            Toast.makeText(this, String.format("Inspecting objects failed ..."), Toast.LENGTH_LONG).show();
         }
     }
+
     private ServiceConnection serviceConnection = new ServiceConnection() {
 
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
-            Log.i("Info",String.format("ComponentName %s service %s", name, service));
+            Log.i("Info", String.format("ComponentName %s service %s", name, service));
             remoteService = ObjectRecogniserAIDL.Stub.asInterface(service);
-            Log.i("Info",String.format("remoteService.getClass().getName() %s", remoteService.getClass().getName()));
+            Log.i("Info", String.format("remoteService.getClass().getName() %s", remoteService.getClass().getName()));
         }
 
         @Override
@@ -168,55 +184,57 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         unbindService(serviceConnection);
     }
-    public void selectImage(View view){
+
+    public void selectImage(View view) {
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
         builder.setTitle("Add Photo");
         builder.setItems(options, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int option) {
                 boolean optionSelected = Utility.checkPermission(MainActivity.this);
-                Log.i("Info", String.format("optionSelected %s ,option selected :%s, options %s", optionSelected,option, Arrays.toString(options)));
-                selectionHelper(options,option,optionSelected,dialogInterface);
+                Log.i("Info", String.format("optionSelected %s ,option selected :%s, options %s", optionSelected, option, Arrays.toString(options)));
+                selectionHelper(options, option, optionSelected, dialogInterface);
                 userSelectedOption = option;
             }
         });
         builder.show();
     }
 
-    private void selectionHelper(CharSequence[] options,int option,boolean optionSelected,DialogInterface dialogInterface){
-        if(options[option].equals("Take Photo")){
-            Log.i("INFO",String.format("take photo"));
-            if(optionSelected)
+    private void selectionHelper(CharSequence[] options, int option, boolean optionSelected, DialogInterface dialogInterface) {
+        if (options[option].equals("Take Photo")) {
+            Log.i("INFO", String.format("take photo"));
+            if (optionSelected)
                 takePhoto();
-        }else if (options[option].equals("Choose from Gallery")){
-            Log.i("INFO",String.format("Choose from Gallery"));
-            if(optionSelected) {
+        } else if (options[option].equals("Choose from Gallery")) {
+            Log.i("INFO", String.format("Choose from Gallery"));
+            if (optionSelected) {
 
                 Log.i("Info", String.format("galleryIntent is about to be called..."));
                 galleryIntent(photoFile);
             }
-        }else if (options[option].equals("Cancel")){
-            Log.i("INFO",String.format("Cancel"));
+        } else if (options[option].equals("Cancel")) {
+            Log.i("INFO", String.format("Cancel"));
             dialogInterface.dismiss();
         }
     }
+
     private void galleryIntent(File photoFile) {
         Log.i("Info", String.format("galleryIntent entered..."));
-        Uri photoURI = FileProvider.getUriForFile(this,"com.example.android.fileprovider", photoFile);
+        Uri photoURI = FileProvider.getUriForFile(this, "com.example.android.fileprovider", photoFile);
         Intent galIntent = new Intent(Intent.ACTION_GET_CONTENT);
-        galIntent.putExtra(MediaStore.EXTRA_OUTPUT,photoURI);
+        galIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
         galIntent.setType("image/*");
         startActivityForResult(Intent.createChooser(galIntent, "Select File"), REQUEST_GALLERY);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        Log.i("INFO",String.format("On request permission result entered , user selected option : %s",userSelectedOption));
+        Log.i("INFO", String.format("On request permission result entered , user selected option : %s", userSelectedOption));
         if (grantResults.length > 0
                 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             try {
                 photoFile = createImage();
-                switch (userSelectedOption){
+                switch (userSelectedOption) {
                     case 0:
                         if (photoFile != null) {
                             startCamera(photoFile);
@@ -239,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
 
     private File createImage() throws IOException {
         String imageFileName = UUID.randomUUID().toString();
-        Log.i("INFO",String.format("Image file name %s ",imageFileName));
+        Log.i("INFO", String.format("Image file name %s ", imageFileName));
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         Log.i("Info", String.format("storageDir %s", storageDir));
         File image = File.createTempFile(
@@ -248,14 +266,14 @@ public class MainActivity extends AppCompatActivity {
                 storageDir
         );
         myCurrentPhotoPath = image.getAbsolutePath();
-        Log.i("INFO",String.format("myCurrentPhotoPath : %s, image : %s",myCurrentPhotoPath,image));
+        Log.i("INFO", String.format("myCurrentPhotoPath : %s, image : %s", myCurrentPhotoPath, image));
         return image;
     }
 
     private void startCamera(File image) {
-        Uri photoURI = FileProvider.getUriForFile(this,"com.example.android.fileprovider", image);
+        Uri photoURI = FileProvider.getUriForFile(this, "com.example.android.fileprovider", image);
         Intent takePhotoIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        takePhotoIntent.putExtra(MediaStore.EXTRA_OUTPUT,photoURI);
+        takePhotoIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
         if (takePhotoIntent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(takePhotoIntent, REQUEST_CAMERA);
         } else {
@@ -269,10 +287,10 @@ public class MainActivity extends AppCompatActivity {
             ExifInterface exif = new ExifInterface(imageFilePath);
             int rotation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
             Log.i("INFO", String.format("CUrrent rotation degree in Exif %s", rotation));
-            if(ExifInterface.ORIENTATION_NORMAL!=rotation){
+            if (ExifInterface.ORIENTATION_NORMAL != rotation) {
                 int rotationInDegrees = exifToDegrees(rotation);
                 Log.i("INFO", String.format("rotation In degrees to apply on Image is %s", rotationInDegrees));
-                Bitmap rotatedBitmapImage = RotateBitmap(convertedBitmapImage,rotationInDegrees);
+                Bitmap rotatedBitmapImage = RotateBitmap(convertedBitmapImage, rotationInDegrees);
                 return rotatedBitmapImage;
             }
         } catch (IOException e) {
@@ -282,15 +300,19 @@ public class MainActivity extends AppCompatActivity {
         }
         return convertedBitmapImage;
     }
+
     private static int exifToDegrees(int exifOrientation) {
-        if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_90) { return 90; }
-        else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_180) {  return 180; }
-        else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_270) {  return 270; }
+        if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_90) {
+            return 90;
+        } else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_180) {
+            return 180;
+        } else if (exifOrientation == ExifInterface.ORIENTATION_ROTATE_270) {
+            return 270;
+        }
         return 0;
     }
 
-    private static Bitmap RotateBitmap(Bitmap source, float angle)
-    {
+    private static Bitmap RotateBitmap(Bitmap source, float angle) {
         Matrix matrix = new Matrix();
         matrix.postRotate(angle);
         return Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
@@ -298,21 +320,21 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        switch (applicationState){
+        switch (applicationState) {
             case PHOTO_TAKEN:
                 applicationState = ApplicationState.APPLICATION_STARTED;
-                Log.i("INFO",String.format("Application state is %s and image to display is %s ",applicationState,imageToDisplay));
+                Log.i("INFO", String.format("Application state is %s and image to display is %s ", applicationState, imageToDisplay));
                 imageToDisplay.setImageBitmap(null);
                 imageToDisplay.setImageResource(R.color.colorPrimaryDark);
                 break;
             case INSPECT_OBJECT_CALLED:
-                Toast.makeText(this,String.format("Inspecting Objects, Please Wait..."),Toast.LENGTH_LONG).show();
+                Toast.makeText(this, String.format("Inspecting Objects, Please Wait..."), Toast.LENGTH_LONG).show();
                 break;
             case INSPECT_OBJECT_FINISHED:
                 applicationState = ApplicationState.PHOTO_TAKEN;
-                Button photoTaken =  findViewById(R.id.selectTakePhoto);
+                Button photoTaken = findViewById(R.id.selectTakePhoto);
                 photoTaken.setVisibility(View.VISIBLE);
-                Button inspectObjs =  findViewById(R.id.inspectObjects);
+                Button inspectObjs = findViewById(R.id.inspectObjects);
                 inspectObjs.setVisibility(View.VISIBLE);
                 TextView resultTextView = findViewById(R.id.resultTextView);
                 resultTextView.setText("");
@@ -321,7 +343,10 @@ public class MainActivity extends AppCompatActivity {
                 resultTextViewDescription.setVisibility(View.INVISIBLE);
                 break;
             default:
-                super.onBackPressed();
+                Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+                homeIntent.addCategory(Intent.CATEGORY_HOME);
+                homeIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(homeIntent);
         }
     }
 
@@ -333,6 +358,66 @@ public class MainActivity extends AppCompatActivity {
         inChannel.transferTo(0, inChannel.size(), outChannel);
         inStream.close();
         outStream.close();
+    }
+
+    private static boolean isIntentAvailable(Context context, String action) {
+        final PackageManager packageManager = context.getPackageManager();
+        final Intent intent = new Intent(action);
+        intent.setPackage("com.aishwaryagm.objectrecogniser");3
+        intent.setType("text/plain");
+        List<ResolveInfo> intentActivities =
+                packageManager.queryIntentActivities(intent,
+                        PackageManager.MATCH_DEFAULT_ONLY);
+        Log.i("INFO",String.format("intentActivities contents : %s ",intentActivities));
+
+        for(PackageInfo packageName: packageManager.getInstalledPackages(0)){
+            Log.i("INFO",String.format("packageName : %s ",packageName));
+
+        }
+
+        return intentActivities.size() > 0;
+    }
+
+    private boolean installmyAPK() {
+        Log.i("INFO", String.format("Entered installMYapk... "));
+        AssetManager assetManager = getAssets();
+        InputStream in = null;
+        OutputStream out = null;
+        File imageRecogniserAPKfile = new File(Environment.getExternalStorageDirectory().getPath() + "/ImageRecogniser.apk");
+        Log.i("INFO", String.format("imageRecogniserAPKfile : %s", imageRecogniserAPKfile));
+        try {
+            if (!imageRecogniserAPKfile.exists()) {
+                in = assetManager.open("ImageRecogniser.apk");
+                out = new FileOutputStream(imageRecogniserAPKfile);
+
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                }
+
+                in.close();
+                in = null;
+
+                out.flush();
+                out.close();
+                out = null;
+            }
+
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Uri appURI = FileProvider.getUriForFile(this, this.getApplicationContext().getPackageName() + ".providers", imageRecogniserAPKfile); //Uri.fromFile(imageRecogniserAPKfile);
+            intent.setDataAndType(appURI,
+                    "application/vnd.android.package-archive");
+            startActivity(intent);
+            return true;
+
+        } catch (Exception e) {
+            Log.e("ERROR", String.format("Exception in installing server application :%s", e.getMessage()));
+            e.printStackTrace();
+            return false;
+        }
+
     }
 }
 
