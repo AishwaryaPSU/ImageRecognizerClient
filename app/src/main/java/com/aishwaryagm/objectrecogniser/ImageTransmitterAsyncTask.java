@@ -9,6 +9,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.aishwaryagm.objectrecogniser.callbackass.CallbackImpl;
 import com.aishwaryagm.objectrecogniser.constants.ApplicationState;
@@ -62,6 +63,7 @@ public class ImageTransmitterAsyncTask extends AsyncTask<Void,Void,Void>  {
         } catch (RemoteException e) {
             Log.e("ERROR",String.format("Exception occurred while calling image analyzer %s",e.getMessage()));
             e.printStackTrace();
+            Toast.makeText(mainActivity,String.format("Inspecting objects failed..."),Toast.LENGTH_LONG).show();
         }
         return null;
     }

@@ -31,8 +31,16 @@ import android.widget.Toast;
 
 import com.aishwaryagm.objectrecogniser.constants.ApplicationState;
 
+import org.apache.commons.io.IOUtils;
+
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.channels.FileChannel;
+import java.util.Arrays;
 import java.util.UUID;
 
 import static android.Manifest.*;
@@ -50,6 +58,8 @@ public class MainActivity extends AppCompatActivity {
     ImageTransmitterAsyncTask imageTransmitterAsyncTask;
     private ApplicationState applicationState;
     private ImageView imageToDisplay;
+    private final CharSequence[] options = {"Take Photo", "Choose from Gallery", "Cancel"};
+    private int userSelectedOption;
 
     public ApplicationState getApplicationState() {
         return applicationState;
@@ -71,10 +81,10 @@ public class MainActivity extends AppCompatActivity {
         applicationState = ApplicationState.APPLICATION_STARTED;
     }
     public void takePhoto(){
+        Log.i("INFO",String.format("Take photo entered"));
         checkWritePermision();
     }
 
-    @SuppressWarnings("")
     private void checkWritePermision() {
         //create an image file name
         int checkPermission = ContextCompat.checkSelfPermission(this, permission.WRITE_EXTERNAL_STORAGE);
@@ -89,28 +99,48 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if((requestCode==REQUEST_CAMERA || requestCode==REQUEST_GALLERY) && resultCode==RESULT_OK){
-            Log.i("INFO",String.format("myCurrentPhotoPath : %s photoFile : %s",myCurrentPhotoPath,photoFile));
-            String filePath = photoFile.getPath();
-            bitmapImage = adjustOrientation(filePath);
-            imageToDisplay = findViewById(R.id.takePhoto);
-            imageToDisplay.setImageBitmap(bitmapImage);
-            applicationState = ApplicationState.PHOTO_TAKEN;
+        Log.i("INFO",String.format("myCurrentPhotoPath : %s photoFile : %s",myCurrentPhotoPath,photoFile));
+        if(requestCode==REQUEST_CAMERA && resultCode==RESULT_OK){
+            //do nothing
         }
+        if(requestCode==REQUEST_GALLERY && resultCode==RESULT_OK){
+            try {
+                InputStream inputStream = this.getContentResolver().openInputStream(data.getData());
+                OutputStream outputStream = new FileOutputStream(photoFile);
+                IOUtils.copy(inputStream, outputStream);
+                outputStream.close();
+            }catch(Exception exception){
+                Log.e("ERROR",String.format("Exceptionduring reading image from gallery %s",exception.getMessage()));
+                exception.printStackTrace();
+            }
+        }
+        String filePath = photoFile.getPath();
+        bitmapImage = adjustOrientation(filePath);
+        imageToDisplay = findViewById(R.id.takePhoto);
+        imageToDisplay.setImageBitmap(bitmapImage);
+        applicationState = ApplicationState.PHOTO_TAKEN;
     }
     public void inspectObjects(View view){
+        try {
+            File newPhotoFile = createImage();
+            copyFile(photoFile, newPhotoFile);
             Button takePhotoButton = findViewById(R.id.selectTakePhoto);
             takePhotoButton.setVisibility(View.INVISIBLE);
             Button inspectObjButton = findViewById(R.id.inspectObjects);
             inspectObjButton.setVisibility(View.INVISIBLE);
-            Toast.makeText(this,"Inspecting Objects...",Toast.LENGTH_LONG).show();
-            ProgressBar progressBar =findViewById(R.id.progressBar);
+            Toast.makeText(this, "Inspecting Objects...", Toast.LENGTH_LONG).show();
+            ProgressBar progressBar = findViewById(R.id.progressBar);
             progressBar.setVisibility(View.VISIBLE);
             TextView resultScrollView = findViewById(R.id.resultTextView);
-            TextView resultTextViewDescription= findViewById(R.id.description);
-            ImageTransmitterAsyncTask imageTransmitterAsyncTask =new ImageTransmitterAsyncTask(bitmapImage,photoFile,remoteService,resultScrollView,this,progressBar,resultTextViewDescription);
+            TextView resultTextViewDescription = findViewById(R.id.description);
+            ImageTransmitterAsyncTask imageTransmitterAsyncTask = new ImageTransmitterAsyncTask(bitmapImage, newPhotoFile, remoteService, resultScrollView, this, progressBar, resultTextViewDescription);
             imageTransmitterAsyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             applicationState = ApplicationState.INSPECT_OBJECT_CALLED;
+        }catch(Exception exception){
+            Log.e("ERROR",String.format("Exception occurred in inspectObjects method , %s",exception.getMessage()));
+            exception.printStackTrace();
+            Toast.makeText(this,String.format("Inspecting objects failed ..."),Toast.LENGTH_LONG).show();
+        }
     }
     private ServiceConnection serviceConnection = new ServiceConnection() {
 
@@ -139,46 +169,65 @@ public class MainActivity extends AppCompatActivity {
         unbindService(serviceConnection);
     }
     public void selectImage(View view){
-        final CharSequence[] options = {"Take Photo", "Choose from Gallery", "Cancel"};
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
         builder.setTitle("Add Photo");
         builder.setItems(options, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int option) {
                 boolean optionSelected = Utility.checkPermission(MainActivity.this);
-                Log.i("Info", String.format("optionSelected %s", optionSelected));
-                if(options[option].equals("Take Photo")){
-                    if(optionSelected)
-                        takePhoto();
-                }else if (options[option].equals("Choose from Gallery")){
-                    if(optionSelected) {
-                        Log.i("Info", String.format("galleryIntent is about to be called..."));
-                        galleryIntent();
-                    }
-                }else if (options[option].equals("Cancel")){
-                    dialogInterface.dismiss();
-                }
+                Log.i("Info", String.format("optionSelected %s ,option selected :%s, options %s", optionSelected,option, Arrays.toString(options)));
+                selectionHelper(options,option,optionSelected,dialogInterface);
+                userSelectedOption = option;
             }
         });
         builder.show();
     }
-    private void galleryIntent() {
+
+    private void selectionHelper(CharSequence[] options,int option,boolean optionSelected,DialogInterface dialogInterface){
+        if(options[option].equals("Take Photo")){
+            Log.i("INFO",String.format("take photo"));
+            if(optionSelected)
+                takePhoto();
+        }else if (options[option].equals("Choose from Gallery")){
+            Log.i("INFO",String.format("Choose from Gallery"));
+            if(optionSelected) {
+
+                Log.i("Info", String.format("galleryIntent is about to be called..."));
+                galleryIntent(photoFile);
+            }
+        }else if (options[option].equals("Cancel")){
+            Log.i("INFO",String.format("Cancel"));
+            dialogInterface.dismiss();
+        }
+    }
+    private void galleryIntent(File photoFile) {
         Log.i("Info", String.format("galleryIntent entered..."));
+        Uri photoURI = FileProvider.getUriForFile(this,"com.example.android.fileprovider", photoFile);
         Intent galIntent = new Intent(Intent.ACTION_GET_CONTENT);
+        galIntent.putExtra(MediaStore.EXTRA_OUTPUT,photoURI);
         galIntent.setType("image/*");
         startActivityForResult(Intent.createChooser(galIntent, "Select File"), REQUEST_GALLERY);
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        Log.i("INFO",String.format("On request permission result entered , user selected option : %s",userSelectedOption));
         if (grantResults.length > 0
                 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             try {
                 photoFile = createImage();
+                switch (userSelectedOption){
+                    case 0:
+                        if (photoFile != null) {
+                            startCamera(photoFile);
+                        }
+                        break;
+                    case 1:
+                        galleryIntent(photoFile);
+                        break;
 
-                if (photoFile != null) {
-                    startCamera(photoFile);
                 }
+
             } catch (IOException exception) {
                 Log.e("ERROR", String.format("Exception occurred while creating the image %s", exception.getMessage()));
                 exception.printStackTrace();
@@ -269,12 +318,21 @@ public class MainActivity extends AppCompatActivity {
                 resultTextView.setText("");
                 resultTextView.setVisibility(View.INVISIBLE);
                 TextView resultTextViewDescription = findViewById(R.id.description);
-                resultTextViewDescription.setText("");
                 resultTextViewDescription.setVisibility(View.INVISIBLE);
                 break;
             default:
                 super.onBackPressed();
         }
+    }
+
+    private void copyFile(File src, File dst) throws IOException {
+        FileInputStream inStream = new FileInputStream(src);
+        FileOutputStream outStream = new FileOutputStream(dst);
+        FileChannel inChannel = inStream.getChannel();
+        FileChannel outChannel = outStream.getChannel();
+        inChannel.transferTo(0, inChannel.size(), outChannel);
+        inStream.close();
+        outStream.close();
     }
 }
 
