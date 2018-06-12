@@ -1,9 +1,8 @@
-package com.aishwaryagm.objectrecogniser;
+package objectrecogniserclient;
 
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.os.RemoteException;
-import android.os.TestLooperManager;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
@@ -11,11 +10,11 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.aishwaryagm.objectrecogniser.callbackass.CallbackImpl;
-import com.aishwaryagm.objectrecogniser.constants.ApplicationState;
+import com.aishwaryagm.objectrecogniser.CallBackInterface;
+import com.aishwaryagm.objectrecogniser.ObjectRecogniserAIDL;
 
+import objectrecogniserclient.constants.ApplicationState;
 
-import org.w3c.dom.Text;
 
 import java.io.File;
 import java.util.Arrays;

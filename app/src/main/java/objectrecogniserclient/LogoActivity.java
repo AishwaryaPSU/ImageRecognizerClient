@@ -1,4 +1,4 @@
-package com.aishwaryagm.objectrecogniser;
+package objectrecogniserclient;
 
 import android.content.Intent;
 import android.os.Bundle;
@@ -6,6 +6,8 @@ import android.os.CountDownTimer;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+
+import com.aishwaryagm.objectrecogniser.R;
 
 /**
  * Created by aishwaryagm on 6/9/18.

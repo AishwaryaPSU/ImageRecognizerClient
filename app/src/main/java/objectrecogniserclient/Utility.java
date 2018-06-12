@@ -1,4 +1,4 @@
-package com.aishwaryagm.objectrecogniser;
+package objectrecogniserclient;
 
 import android.Manifest;
 import android.annotation.TargetApi;

@@ -13,23 +13,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <provider
-            android:name="com.aishwaryagm.objectrecogniser.providers.GenericFileProvider"
-            android:authorities="${applicationId}.providers"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/provider_paths"/>
-        </provider>
-        <activity android:name="com.aishwaryagm.objectrecogniser.LogoActivity"
+        <activity android:name="objectrecogniserclient.LogoActivity"
             android:theme="@style/AppTheme.NoActionBar">
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
         </activity>
-        <activity android:name="com.aishwaryagm.objectrecogniser.MainActivity">
+        <activity android:name="objectrecogniserclient.MainActivity">
         </activity>
         <provider
             android:name="android.support.v4.content.FileProvider"

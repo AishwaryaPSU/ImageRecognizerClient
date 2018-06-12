@@ -1,4 +1,4 @@
-package com.aishwaryagm.objectrecogniser.providers;
+package objectrecogniserclient.providers;
 
 import android.support.v4.content.FileProvider;
 

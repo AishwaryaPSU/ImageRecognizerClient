@@ -1,4 +1,4 @@
-package com.aishwaryagm.objectrecogniser;
+package objectrecogniserclient;
 
 
 import android.content.ComponentName;
@@ -6,9 +6,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
 import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -17,7 +15,6 @@ import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.CountDownTimer;
 import android.os.Environment;
 import android.os.IBinder;
 import android.provider.MediaStore;
@@ -33,7 +30,10 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.aishwaryagm.objectrecogniser.constants.ApplicationState;
+import com.aishwaryagm.objectrecogniser.ObjectRecogniserAIDL;
+import com.aishwaryagm.objectrecogniser.R;
+
+import objectrecogniserclient.constants.ApplicationState;
 
 import org.apache.commons.io.IOUtils;
 
@@ -45,7 +45,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
-import java.util.List;
 import java.util.UUID;
 
 import static android.Manifest.*;
@@ -54,17 +53,19 @@ public class MainActivity extends AppCompatActivity {
     //REQUEST_ID refers to the unique id for the intent request which can be used in the onActivityResult method to differentiate between the results of the requests
     private static final int REQUEST_CAMERA = 1;
     private static final int REQUEST_GALLERY = 2;
+    private static final int REQUEST_SERVER_INSTALLATION = 3;
     private ObjectRecogniserAIDL remoteService;
     private Bitmap bitmapImage;
     private File photoFile;
-    static final int REQUEST_TAKE_PHOTO = 1;
     private String myCurrentPhotoPath;
-    private static final int REQUEST_PERMISSION_CODE = 3;
-    ImageTransmitterAsyncTask imageTransmitterAsyncTask;
+    private static final int REQUEST_PERMISSION_CODE = 4;
+    private static final int REQUEST_STORAGE_FOR_APK = 5;
     private ApplicationState applicationState;
     private ImageView imageToDisplay;
-    private final CharSequence[] options = {"Take Photo", "Choose from Gallery", "Cancel"};
+    private final CharSequence[] OPTIONS = {"Take Photo", "Choose from Gallery", "Cancel"};
     private int userSelectedOption;
+    private final String SERVER_PACKAGE_NAME = "com.aishwaryagm.objectrecogniser";
+    private final String SERVICE_ACTION = "com.aishwaryagm.objectrecogniser.services.ObjectRecogniserService";
 
     public ApplicationState getApplicationState() {
         return applicationState;
@@ -78,28 +79,31 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        String serviceAction = "com.aishwaryagm.objectrecogniser.services.ObjectRecogniserService";
-        boolean isServiceAvailable = isIntentAvailable(this, serviceAction);
+        boolean isServiceAvailable = isAppInstalled(SERVER_PACKAGE_NAME);//isIntentAvailable(this, SERVICE_ACTION);
         Log.i("INFO", String.format("isServiceAvailable : %s", isServiceAvailable));
         if (!isServiceAvailable) {
             Toast.makeText(this, String.format("Please install server application"), Toast.LENGTH_LONG).show();
-            Log.i("INFO", String.format("server app installed %s : ", installmyAPK()));
+            installServerAPK();
+        } else {
+            bindService(SERVICE_ACTION, SERVER_PACKAGE_NAME);
         }
-        Intent serviceIntent = new Intent(serviceAction);
-        serviceIntent.setPackage("com.aishwaryagm.objectrecogniser");
+    }
+
+    private void bindService (String serviceAction,String packageName){
         Log.i("INFO", String.format("bindService is about to be called...."));
+        Intent serviceIntent = new Intent(serviceAction);
+        serviceIntent.setPackage(packageName);
         boolean isSuccessful = bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
         Log.i("INFO", String.format("bindService result %s", isSuccessful));
         applicationState = ApplicationState.APPLICATION_STARTED;
     }
-
     public void takePhoto() {
         Log.i("INFO", String.format("Take photo entered"));
-        checkWritePermision();
+        checkWritePermision(REQUEST_PERMISSION_CODE);
     }
 
 
-    private void checkWritePermision() {
+    private boolean checkWritePermision(int requestPermissionCode) {
         //create an image file name
         int checkPermission = ContextCompat.checkSelfPermission(this, permission.WRITE_EXTERNAL_STORAGE);
         int permissionGranted = PackageManager.PERMISSION_GRANTED;
@@ -107,15 +111,18 @@ public class MainActivity extends AppCompatActivity {
 
         if (checkPermission != permissionGranted) {
             String[] permissions = {permission.WRITE_EXTERNAL_STORAGE, permission.READ_EXTERNAL_STORAGE};
-            this.requestPermissions(permissions, REQUEST_PERMISSION_CODE);
+            this.requestPermissions(permissions, requestPermissionCode);
+            return false;
         }
+        return true;
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         Log.i("INFO", String.format("myCurrentPhotoPath : %s photoFile : %s", myCurrentPhotoPath, photoFile));
+        Log.i("INFO", String.format("requestCode : %s resultCode : %s", requestCode, resultCode));
         if (requestCode == REQUEST_CAMERA && resultCode == RESULT_OK) {
-            //do nothing
+            setImageView();
         }
         if (requestCode == REQUEST_GALLERY && resultCode == RESULT_OK) {
             try {
@@ -123,18 +130,30 @@ public class MainActivity extends AppCompatActivity {
                 OutputStream outputStream = new FileOutputStream(photoFile);
                 IOUtils.copy(inputStream, outputStream);
                 outputStream.close();
+                setImageView();
             } catch (Exception exception) {
                 Log.e("ERROR", String.format("Exceptionduring reading image from gallery %s", exception.getMessage()));
                 exception.printStackTrace();
             }
         }
+        if(requestCode == REQUEST_SERVER_INSTALLATION){
+            Log.i("INFO",String.format("SERVER installation finished. result code : %s",resultCode));
+            boolean isServiceAvailable = isAppInstalled(SERVER_PACKAGE_NAME);
+            if(isServiceAvailable) {
+                bindService(SERVICE_ACTION, SERVER_PACKAGE_NAME);
+            } else {
+                Toast.makeText(this,String.format("SERVICE INSTALLATION was unsuccessful"),Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void setImageView(){
         String filePath = photoFile.getPath();
         bitmapImage = adjustOrientation(filePath);
         imageToDisplay = findViewById(R.id.takePhoto);
         imageToDisplay.setImageBitmap(bitmapImage);
         applicationState = ApplicationState.PHOTO_TAKEN;
     }
-
     public void inspectObjects(View view) {
         try {
             File newPhotoFile = createImage();
@@ -188,12 +207,12 @@ public class MainActivity extends AppCompatActivity {
     public void selectImage(View view) {
         AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
         builder.setTitle("Add Photo");
-        builder.setItems(options, new DialogInterface.OnClickListener() {
+        builder.setItems(OPTIONS, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int option) {
                 boolean optionSelected = Utility.checkPermission(MainActivity.this);
-                Log.i("Info", String.format("optionSelected %s ,option selected :%s, options %s", optionSelected, option, Arrays.toString(options)));
-                selectionHelper(options, option, optionSelected, dialogInterface);
+                Log.i("Info", String.format("optionSelected %s ,option selected :%s, OPTIONS %s", optionSelected, option, Arrays.toString(OPTIONS)));
+                selectionHelper(OPTIONS, option, optionSelected, dialogInterface);
                 userSelectedOption = option;
             }
         });
@@ -229,36 +248,47 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
-        Log.i("INFO", String.format("On request permission result entered , user selected option : %s", userSelectedOption));
-        if (grantResults.length > 0
+        Log.i("Info",String.format("onRequestPermissionsResult entered. requestCode %s permissions %s, grantResults %s", requestCode, permissions, grantResults));
+        if (requestCode == REQUEST_STORAGE_FOR_APK && grantResults.length > 0
                 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            try {
-                photoFile = createImage();
-                switch (userSelectedOption) {
-                    case 0:
-                        if (photoFile != null) {
-                            startCamera(photoFile);
-                        }
-                        break;
-                    case 1:
-                        galleryIntent(photoFile);
-                        break;
-
-                }
-
-            } catch (IOException exception) {
-                Log.e("ERROR", String.format("Exception occurred while creating the image %s", exception.getMessage()));
-                exception.printStackTrace();
-            }
+            Log.i("INFO", String.format("Permission to store apk granted"));
+            copyApk();
         } else {
-            Log.i("INFO", "Permission denied");
+            Log.i("INFO", String.format("On request permission result entered , user selected option : %s", userSelectedOption));
+            if (grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                try {
+                    photoFile = createImage();
+                    switch (userSelectedOption) {
+                        case 0:
+                            if (photoFile != null) {
+                                startCamera(photoFile);
+                            }
+                            break;
+                        case 1:
+                            galleryIntent(photoFile);
+                            break;
+
+                    }
+
+                } catch (IOException exception) {
+                    Log.e("ERROR", String.format("Exception occurred while creating the image %s", exception.getMessage()));
+                    exception.printStackTrace();
+                }
+            } else {
+                Log.i("INFO", "Permission denied");
+            }
         }
     }
 
     private File createImage() throws IOException {
         String imageFileName = UUID.randomUUID().toString();
         Log.i("INFO", String.format("Image file name %s ", imageFileName));
-        File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File storageDir = new File(Environment.getExternalStorageDirectory()+"/Pictures");
+        if(!storageDir.exists()){
+            boolean directoryCreated = storageDir.mkdir();
+            Log.i("INFO",String.format("Storage directory was absent, created now!! .. %s",directoryCreated));
+        }
         Log.i("Info", String.format("storageDir %s", storageDir));
         File image = File.createTempFile(
                 imageFileName,
@@ -360,34 +390,43 @@ public class MainActivity extends AppCompatActivity {
         outStream.close();
     }
 
-    private static boolean isIntentAvailable(Context context, String action) {
-        final PackageManager packageManager = context.getPackageManager();
-        final Intent intent = new Intent(action);
-        intent.setPackage("com.aishwaryagm.objectrecogniser");3
-        intent.setType("text/plain");
-        List<ResolveInfo> intentActivities =
-                packageManager.queryIntentActivities(intent,
-                        PackageManager.MATCH_DEFAULT_ONLY);
-        Log.i("INFO",String.format("intentActivities contents : %s ",intentActivities));
-
-        for(PackageInfo packageName: packageManager.getInstalledPackages(0)){
-            Log.i("INFO",String.format("packageName : %s ",packageName));
-
+    private boolean isAppInstalled(String uri){
+        PackageManager pm = getPackageManager();
+        try {
+            pm.getPackageInfo(uri, PackageManager.GET_ACTIVITIES);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
         }
-
-        return intentActivities.size() > 0;
+        return false;
     }
 
-    private boolean installmyAPK() {
+    private void installServerAPK() {
         Log.i("INFO", String.format("Entered installMYapk... "));
-        AssetManager assetManager = getAssets();
-        InputStream in = null;
-        OutputStream out = null;
-        File imageRecogniserAPKfile = new File(Environment.getExternalStorageDirectory().getPath() + "/ImageRecogniser.apk");
-        Log.i("INFO", String.format("imageRecogniserAPKfile : %s", imageRecogniserAPKfile));
+        if(checkWritePermision(REQUEST_STORAGE_FOR_APK)){
+            copyApk();
+        }
+    }
+
+    private void copyApk(){
         try {
-            if (!imageRecogniserAPKfile.exists()) {
-                in = assetManager.open("ImageRecogniser.apk");
+            AssetManager assetManager = getAssets();
+            InputStream in = null;
+            OutputStream out = null;
+            File apkDirectory = new File(Environment.getExternalStorageDirectory().getPath() + "/Apks");
+            if (!apkDirectory.exists()) {
+                boolean isDirectoryCreated = apkDirectory.mkdir();
+                Log.i("Info", String.format("apkDirectory %s created! %s", apkDirectory, isDirectoryCreated));
+            }
+            File imageRecogniserAPKfile = File.createTempFile(
+                    "ImageRecogniser",
+                    ".apk",
+                    apkDirectory
+            ); //new File(apkDirectory.getPath() + "/ImageRecogniser.apk");
+            Log.i("INFO", String.format("imageRecogniserAPKfile : %s", imageRecogniserAPKfile));
+            if (true) {
+
+                in = assetManager.open("imageRecogniser.apk");
+                Log.i("Info", String.format("imageRecogniser.apk in assets %s", in));
                 out = new FileOutputStream(imageRecogniserAPKfile);
 
                 byte[] buffer = new byte[1024];
@@ -406,18 +445,14 @@ public class MainActivity extends AppCompatActivity {
 
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            Uri appURI = FileProvider.getUriForFile(this, this.getApplicationContext().getPackageName() + ".providers", imageRecogniserAPKfile); //Uri.fromFile(imageRecogniserAPKfile);
+            Uri appURI = FileProvider.getUriForFile(this, "com.example.android.fileprovider", imageRecogniserAPKfile); //Uri.fromFile(imageRecogniserAPKfile);
             intent.setDataAndType(appURI,
                     "application/vnd.android.package-archive");
-            startActivity(intent);
-            return true;
-
+            startActivityForResult(intent, REQUEST_SERVER_INSTALLATION);
         } catch (Exception e) {
             Log.e("ERROR", String.format("Exception in installing server application :%s", e.getMessage()));
             e.printStackTrace();
-            return false;
         }
-
     }
 }
 
