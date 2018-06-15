@@ -35,8 +35,6 @@ import com.aishwaryagm.objectrecogniser.R;
 
 import objectrecogniserclient.constants.ApplicationState;
 
-import org.apache.commons.io.IOUtils;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -128,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 InputStream inputStream = this.getContentResolver().openInputStream(data.getData());
                 OutputStream outputStream = new FileOutputStream(photoFile);
-                IOUtils.copy(inputStream, outputStream);
+                copyFileStream(inputStream,outputStream);
                 outputStream.close();
                 setImageView();
             } catch (Exception exception) {
@@ -406,7 +404,19 @@ public class MainActivity extends AppCompatActivity {
             copyApk();
         }
     }
-
+    private void copyFileStream(InputStream in, OutputStream out){
+        try {
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            in.close();
+        } catch (IOException ex) {
+            Log.e("ERROR", String.format("Exception occurred in copying file streams!!! %s ", ex.getMessage()));
+            ex.printStackTrace();
+        }
+    }
     private void copyApk(){
         try {
             AssetManager assetManager = getAssets();
