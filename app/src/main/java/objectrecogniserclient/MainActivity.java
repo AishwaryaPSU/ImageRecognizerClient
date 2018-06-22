@@ -126,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_CAMERA && resultCode == RESULT_OK) {
             setImageView();
         }
+
         if (requestCode == REQUEST_GALLERY && resultCode == RESULT_OK) {
             try {
                 InputStream inputStream = this.getContentResolver().openInputStream(data.getData());
@@ -155,12 +156,13 @@ public class MainActivity extends AppCompatActivity {
         networkAvailabilityCheckAsyncTask.execute();
     }
 
-    private void setImageView(){
-        String filePath = photoFile.getPath();
-        bitmapImage = adjustOrientation(filePath);
-        imageToDisplay = findViewById(R.id.takePhoto);
-        imageToDisplay.setImageBitmap(bitmapImage);
-        applicationState = ApplicationState.PHOTO_TAKEN;
+    private void setImageView() {
+        Log.i("INFO","setImageView invoked");
+            String filePath = photoFile.getPath();
+            bitmapImage = adjustOrientation(filePath);
+            imageToDisplay = findViewById(R.id.takePhoto);
+            imageToDisplay.setImageBitmap(bitmapImage);
+            applicationState = ApplicationState.PHOTO_TAKEN;
     }
 
     public void validateNetworkConnection(View view) {
@@ -169,20 +171,24 @@ public class MainActivity extends AppCompatActivity {
 
     public void inspectObject(){
         try {
-            File newPhotoFile = createImage();
-            copyFile(photoFile, newPhotoFile);
-            Button takePhotoButton = findViewById(R.id.selectTakePhoto);
-            takePhotoButton.setVisibility(View.INVISIBLE);
-            Button inspectObjButton = findViewById(R.id.inspectObjects);
-            inspectObjButton.setVisibility(View.INVISIBLE);
-            Toast.makeText(this, "Inspecting Objects...", Toast.LENGTH_LONG).show();
-            ProgressBar progressBar = findViewById(R.id.progressBar);
-            progressBar.setVisibility(View.VISIBLE);
-            TextView resultScrollView = findViewById(R.id.resultTextView);
-            TextView resultTextViewDescription = findViewById(R.id.description);
-            ImageTransmitterAsyncTask imageTransmitterAsyncTask = new ImageTransmitterAsyncTask(bitmapImage, newPhotoFile, remoteService, resultScrollView, this, progressBar, resultTextViewDescription);
-            imageTransmitterAsyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-            applicationState = ApplicationState.INSPECT_OBJECT_CALLED;
+            if(photoFile != null && photoFile.length() > 0) {
+                File newPhotoFile = createImage();
+                copyFile(photoFile, newPhotoFile);
+                Button takePhotoButton = findViewById(R.id.selectTakePhoto);
+                takePhotoButton.setVisibility(View.INVISIBLE);
+                Button inspectObjButton = findViewById(R.id.inspectObjects);
+                inspectObjButton.setVisibility(View.INVISIBLE);
+                Toast.makeText(this, "Inspecting Objects...", Toast.LENGTH_LONG).show();
+                ProgressBar progressBar = findViewById(R.id.progressBar);
+                progressBar.setVisibility(View.VISIBLE);
+                TextView resultScrollView = findViewById(R.id.resultTextView);
+                TextView resultTextViewDescription = findViewById(R.id.description);
+                ImageTransmitterAsyncTask imageTransmitterAsyncTask = new ImageTransmitterAsyncTask(bitmapImage, newPhotoFile, remoteService, resultScrollView, this, progressBar, resultTextViewDescription);
+                imageTransmitterAsyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                applicationState = ApplicationState.INSPECT_OBJECT_CALLED;
+            } else {
+                Toast.makeText(this, String.format("Please click/select image to inspect!"), Toast.LENGTH_SHORT).show();
+            }
         } catch (Exception exception) {
             Log.e("ERROR", String.format("Exception occurred in validateNetworkConnection method , %s", exception.getMessage()));
             exception.printStackTrace();
@@ -368,6 +374,8 @@ public class MainActivity extends AppCompatActivity {
                 applicationState = ApplicationState.APPLICATION_STARTED;
                 Log.i("INFO", String.format("Application state is %s and image to display is %s ", applicationState, imageToDisplay));
                 imageToDisplay.setImageBitmap(null);
+                photoFile = null;
+                Log.i("INFO", String.format("set imageToDisplay  to null ,imageToDisplay is %s ", imageToDisplay));
                 imageToDisplay.setImageResource(R.color.colorPrimaryDark);
                 break;
             case INSPECT_OBJECT_CALLED:
