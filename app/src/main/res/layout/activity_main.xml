@@ -23,7 +23,7 @@
         android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
         android:layout_marginBottom="16dp"
-        android:onClick="inspectObjects"
+        android:onClick="validateNetworkConnection"
         android:text="INSPECT OBJECTS" />
 
     <ImageView
@@ -42,6 +42,7 @@
         android:layout_below="@+id/takePhoto"
         android:background="@android:drawable/editbox_background"
         android:maxLines="100"
+        android:onClick="validateNetworkConnection"
         android:overScrollMode="ifContentScrolls"
         android:paddingLeft="40dp"
         android:scrollIndicators="right"

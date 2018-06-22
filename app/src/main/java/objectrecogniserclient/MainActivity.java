@@ -12,6 +12,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -33,6 +35,8 @@ import android.widget.Toast;
 import com.aishwaryagm.objectrecogniser.ObjectRecogniserAIDL;
 import com.aishwaryagm.objectrecogniser.R;
 
+import objectrecogniserclient.asynctasks.ImageTransmitterAsyncTask;
+import objectrecogniserclient.asynctasks.NetworkAvailabilityCheckAsyncTask;
 import objectrecogniserclient.constants.ApplicationState;
 
 import java.io.File;
@@ -145,6 +149,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void isNetworkConnected() {
+        //check for internet available as well rather than just network
+        NetworkAvailabilityCheckAsyncTask networkAvailabilityCheckAsyncTask = new NetworkAvailabilityCheckAsyncTask(this);
+        networkAvailabilityCheckAsyncTask.execute();
+    }
+
     private void setImageView(){
         String filePath = photoFile.getPath();
         bitmapImage = adjustOrientation(filePath);
@@ -152,7 +162,12 @@ public class MainActivity extends AppCompatActivity {
         imageToDisplay.setImageBitmap(bitmapImage);
         applicationState = ApplicationState.PHOTO_TAKEN;
     }
-    public void inspectObjects(View view) {
+
+    public void validateNetworkConnection(View view) {
+        isNetworkConnected();
+    }
+
+    public void inspectObject(){
         try {
             File newPhotoFile = createImage();
             copyFile(photoFile, newPhotoFile);
@@ -169,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
             imageTransmitterAsyncTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             applicationState = ApplicationState.INSPECT_OBJECT_CALLED;
         } catch (Exception exception) {
-            Log.e("ERROR", String.format("Exception occurred in inspectObjects method , %s", exception.getMessage()));
+            Log.e("ERROR", String.format("Exception occurred in validateNetworkConnection method , %s", exception.getMessage()));
             exception.printStackTrace();
             Toast.makeText(this, String.format("Inspecting objects failed ..."), Toast.LENGTH_LONG).show();
         }
