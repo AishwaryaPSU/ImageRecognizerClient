@@ -1,4 +1,4 @@
-package objectrecogniserclient;
+package objectrecogniserclient.asynctasks;
 
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
@@ -13,6 +13,7 @@ import android.widget.Toast;
 import com.aishwaryagm.objectrecogniser.CallBackInterface;
 import com.aishwaryagm.objectrecogniser.ObjectRecogniserAIDL;
 
+import objectrecogniserclient.MainActivity;
 import objectrecogniserclient.constants.ApplicationState;
 
 
