@@ -126,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_CAMERA && resultCode == RESULT_OK) {
             setImageView();
         }
+
         if (requestCode == REQUEST_GALLERY && resultCode == RESULT_OK) {
             try {
                 InputStream inputStream = this.getContentResolver().openInputStream(data.getData());
@@ -155,12 +156,13 @@ public class MainActivity extends AppCompatActivity {
         networkAvailabilityCheckAsyncTask.execute();
     }
 
-    private void setImageView(){
-        String filePath = photoFile.getPath();
-        bitmapImage = adjustOrientation(filePath);
-        imageToDisplay = findViewById(R.id.takePhoto);
-        imageToDisplay.setImageBitmap(bitmapImage);
-        applicationState = ApplicationState.PHOTO_TAKEN;
+    private void setImageView() {
+        Log.i("INFO","setImageView invoked");
+            String filePath = photoFile.getPath();
+            bitmapImage = adjustOrientation(filePath);
+            imageToDisplay = findViewById(R.id.takePhoto);
+            imageToDisplay.setImageBitmap(bitmapImage);
+            applicationState = ApplicationState.PHOTO_TAKEN;
     }
 
     public void validateNetworkConnection(View view) {
@@ -169,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
 
     public void inspectObject(){
         try {
-            if(photoFile != null) {
+            if(photoFile != null && photoFile.length() > 0) {
                 File newPhotoFile = createImage();
                 copyFile(photoFile, newPhotoFile);
                 Button takePhotoButton = findViewById(R.id.selectTakePhoto);
