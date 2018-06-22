@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/ImageRecogniserClient.iml" filepath="$PROJECT_DIR$/ImageRecogniserClient.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ImageRecognizerClient.iml" filepath="$PROJECT_DIR$/ImageRecognizerClient.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>
